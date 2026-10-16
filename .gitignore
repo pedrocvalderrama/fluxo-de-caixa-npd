@@ -1,0 +1,38 @@
+# Ambientes virtuais
+venv/
+.venv/
+env/
+ENV/
+
+# Python / Bytecode / Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.pyo
+
+# Banco de dados e dados locais (confidenciais)
+data/*
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+data/*.log
+
+# Arquivos de dados / dumps locais (confidenciais)
+*.csv
+*.xlsx
+*.xls
+~$*
+
+# Atalhos Windows e arquivos temporários
+*.lnk
+*.tmp
+
+# Variáveis de ambiente com senhas e credenciais locais
+.env
