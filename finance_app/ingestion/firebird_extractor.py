@@ -129,20 +129,34 @@ def extrair_receber_sisplan(
             val_pago_float = float(r_valor_pago) if isinstance(r_valor_pago, (Decimal, float, int)) else 0.0
             desc_float = float(r_desconto) if isinstance(r_desconto, (Decimal, float, int)) else 0.0
             total_liquidado = val_pago_float + desc_float
-            val_absoluto = abs(val_float)
 
             # Tratamento de data zero do Delphi (1899-12-30) em DT_PAGTO
             if dt_transacao and is_data_anomala(dt_transacao):
-                if total_liquidado >= (val_float - 0.009):
+                dt_transacao = None
+
+            # Determinação de em_aberto e do valor para o fluxo de caixa:
+            # 1. Se não houve valor pago nem liquidação (> 0), está estritamente em aberto
+            #    (corrige o bug de DT_PAGTO_DUPLI preenchida no Firebird com VALOR_PAGO = 0)
+            if val_pago_float <= 0 and total_liquidado <= 0:
+                em_aberto = True
+                dt_transacao = None
+                val_absoluto = abs(val_float)
+                valor_final = val_absoluto
+            elif val_pago_float > 0 or (total_liquidado >= (val_float - 0.009) and val_float > 0):
+                # Título realizado / quitado:
+                em_aberto = False
+                if dt_transacao is None:
                     dt_transacao = dt_vencimento
-                else:
-                    dt_transacao = None
-
-            # Para contas a receber, valor é positivo
-            valor_final = val_absoluto
-
-            # Aberto se não tem data de pagamento E valor pago/liquidado não atingiu o valor do título
-            em_aberto = (dt_transacao is None and total_liquidado < (val_float - 0.009))
+                # Usa o valor líquido efetivamente pago (conforme coluna Pago do Sisplan)
+                valor_liquido = val_pago_float if val_pago_float > 0 else (total_liquidado if total_liquidado > 0 else val_float)
+                val_absoluto = abs(valor_liquido)
+                valor_final = val_absoluto
+            else:
+                # Pagamento parcial em aberto
+                em_aberto = True
+                saldo_restante = max(0.0, val_float - total_liquidado)
+                val_absoluto = abs(saldo_restante if saldo_restante > 0 else val_float)
+                valor_final = val_absoluto
             banco_cod = resolver_codigo_banco(r_banco) if r_banco else None
 
             prefixo, _ = extrair_prefixo_categoria(natureza_str)
@@ -295,17 +309,29 @@ def extrair_pagar_sisplan(
             # Valores (float) - Para PAGAR, valor é negativo no fluxo de caixa
             val_float = float(r_valor) if isinstance(r_valor, (Decimal, float, int)) else 0.0
             val_pago_float = float(r_valor_pago) if isinstance(r_valor_pago, (Decimal, float, int)) else 0.0
-            val_absoluto = abs(val_float)
-            valor_final = -val_absoluto
 
             # Tratamento de data zero do Delphi (1899-12-30) em DT_PAGTO
             if dt_transacao and is_data_anomala(dt_transacao):
-                if val_pago_float >= (val_float - 0.009):
-                    dt_transacao = dt_vencimento
-                else:
-                    dt_transacao = None
+                dt_transacao = None
 
-            em_aberto = (dt_transacao is None and val_pago_float < (val_float - 0.009))
+            if val_pago_float <= 0:
+                em_aberto = True
+                dt_transacao = None
+                val_absoluto = abs(val_float)
+                valor_final = -val_absoluto
+            elif val_pago_float >= (val_float - 0.009):
+                # Quitado
+                em_aberto = False
+                if dt_transacao is None:
+                    dt_transacao = dt_vencimento
+                val_absoluto = abs(val_pago_float)
+                valor_final = -val_absoluto
+            else:
+                # Pagamento parcial
+                em_aberto = True
+                saldo_restante = max(0.0, val_float - val_pago_float)
+                val_absoluto = abs(saldo_restante)
+                valor_final = -val_absoluto
             banco_cod = resolver_codigo_banco(r_banco) if r_banco else None
 
             prefixo, _ = extrair_prefixo_categoria(natureza_str)
